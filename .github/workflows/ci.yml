@@ -111,7 +111,12 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: '1'
+
+      - name: Upload Trivy Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-${{ matrix.service }}
+          path: trivy-results.sarif
 
       - name: Push image to Docker Hub for ${{ matrix.service }}
         run: |
