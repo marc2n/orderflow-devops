@@ -8,6 +8,6 @@ public class NotificationService {
 
     @KafkaListener(topics = "notificationTopic", groupId = "order-service-group")
     public void listen(String message) {
-        System.out.println("Received OrderCreated event for order: " + message);
+        System.out.println("Received " + message);
     }
 }
