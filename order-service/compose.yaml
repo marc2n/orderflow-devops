@@ -2,12 +2,14 @@ services:
   mysql:
     image: mysql:latest
     environment:
-      - 'MYSQL_DATABASE=orderdb'
-      - 'MYSQL_PASSWORD=Android2026'
-      - 'MYSQL_ROOT_PASSWORD=Android2026'
-      - 'MYSQL_USER=myuser'
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     ports:
       - '3307:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
 
   kafka:
     image: apache/kafka:latest
@@ -33,3 +35,4 @@ services:
 
 volumes:
   kafka-data:
+  mysql-data:

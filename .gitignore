@@ -40,7 +40,6 @@ build/
 
 ### Local environment / secrets ###
 .env
-.env.*
 *.pem
 *.key
 *.crt
