@@ -84,7 +84,7 @@ jobs:
       - name: Scan Docker image for ${{ matrix.service }}
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.20.0 image \
+            aquasec/trivy:latest image \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \

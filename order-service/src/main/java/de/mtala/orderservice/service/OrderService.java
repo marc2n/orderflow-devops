@@ -4,6 +4,7 @@ import de.mtala.orderservice.dto.OrderRequest;
 import de.mtala.orderservice.dto.OrderResponse;
 import de.mtala.orderservice.model.Order;
 import de.mtala.orderservice.repository.OrderRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -46,5 +47,27 @@ public class OrderService {
     public void sendOrderNotification(String orderEvent) {
         log.info("Sending order notification for order number: {}", orderEvent);
         kafkaTemplate.send(TOPIC, orderEvent);
+    }
+
+    public List<OrderResponse> getOrders() {
+        return orderRepository.findAll().stream()
+                .map(order -> OrderResponse.builder()
+                        .customerName(order.getCustomerName())
+                        .productName(order.getProductName())
+                        .quantity(order.getQuantity())
+                        .createdAt(order.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+        public OrderResponse getOrderById(Long orderNumber) {
+        Order order = orderRepository.findById(orderNumber)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        return OrderResponse.builder()
+                .customerName(order.getCustomerName())
+                .productName(order.getProductName())
+                .quantity(order.getQuantity())
+                .createdAt(order.getCreatedAt())
+                .build();
     }
 }
