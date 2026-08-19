@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:mysql://localhost:3307/orderdb
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: myuser
+    password: Android2026
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: 8081
+
+management:
+  health:
+    circuitBreakers:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakerevents
+  endpoint:
+    health:
+      showDetails: always
+
+resilience4j:
+  circuitBreaker:
+    instances:
+        orderServiceCircuitBreaker:
+            registerHealthIndicator: true
+            eventConsumerBufferSize: 10
+            slidingWindowSize: 5
+            slidingWindowType: COUNT_BASED
+            failureRateThreshold: 50
+            minimumNumberOfCalls: 5
+            permittedNumberOfCallsInHalfOpenState: 3
+            waitDurationInOpenState: 5s
+            automaticTransitionFromOpenToHalfOpenEnabled: true
