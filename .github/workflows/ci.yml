@@ -27,13 +27,25 @@ jobs:
           cache: maven
 
       - name: Maven test
-        run: mvn -B test
+        run: ./mvnw -B test
 
       - name: Maven package
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
-        run: mvn -B package -DskipTests
+        run: ./mvnw -B package -DskipTests
+
+      - name: Upload order-service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-service-target
+          path: order-service/target/*.jar
+
+      - name: Upload notification-service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: notification-service-target
+          path: notification-service/target/*.jar
 
       - name: Sonar analysis
         env:
@@ -71,6 +83,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download built artifact for ${{ matrix.service }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-target
+          path: ${{ matrix.service }}/target
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -80,7 +98,7 @@ jobs:
       - name: Build Docker image for ${{ matrix.service }}
         run: |
           IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
-          # use service folder as build context so Dockerfile's "COPY src ./src" works
+          # use service folder as build context so Dockerfile's COPY target/*jar works
           docker build -t ${IMAGE}:${SHORT_SHA} -f ${{ matrix.dockerfile }} ${{ matrix.service }}
           # create short tag (first 4 chars) and latest tag
           docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:${SHORT_SHA:0:4}

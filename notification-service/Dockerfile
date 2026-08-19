@@ -2,7 +2,8 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY notification-service/target/notification-service-*.jar notification-service.jar
+# Copy the already-built jar from the service's target directory (build artifacts are uploaded/downloaded between jobs)
+COPY target/*jar notification-service.jar
 
 EXPOSE 8082
 

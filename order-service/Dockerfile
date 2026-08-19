@@ -2,7 +2,8 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-COPY order-service/target/order-service-*.jar order-service.jar
+# Copy the already-built jar from the service's target directory (build artifacts are uploaded/downloaded between jobs)
+COPY target/*jar order-service.jar
 
 EXPOSE 8081
 
