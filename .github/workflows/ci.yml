@@ -30,6 +30,9 @@ jobs:
         run: ./mvnw -B test
 
       - name: Maven package
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
         run: ./mvnw -B package -DskipTests
 
       - name: Sonar analysis

@@ -4,8 +4,8 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3307/orderdb
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: myuser
-    password: Android2026
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   jpa:
     hibernate:
