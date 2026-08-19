@@ -59,13 +59,12 @@ jobs:
       matrix:
         include:
           - service: notification-service
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/notification-service
             dockerfile: notification-service/Dockerfile
           - service: order-service
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/order-service
             dockerfile: order-service/Dockerfile
     env:
       SHORT_SHA: ${{ github.sha }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout
@@ -78,21 +77,25 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker image for ${{ matrix.service }}
-        run: docker build -t ${{ matrix.image }}:${SHORT_SHA:0:4} -f ${{ matrix.dockerfile }} .
+        run: |
+          IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
+          docker build -t ${IMAGE}:${SHORT_SHA} -f ${{ matrix.dockerfile }} .
+          # create short tag (first 4 chars) and latest tag
+          docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:${SHORT_SHA:0:4}
+          docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:latest
 
       - name: Scan Docker image for ${{ matrix.service }}
-        run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
-            --severity HIGH,CRITICAL \
-            --ignore-unfixed \
-            --exit-code 1 \
-            ${{ matrix.image }}:${SHORT_SHA:0:4}
-
-      - name: Tag image as latest for ${{ matrix.service }}
-        run: docker tag ${{ matrix.image }}:${SHORT_SHA:0:4} ${{ matrix.image }}:latest
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
       - name: Push image to Docker Hub for ${{ matrix.service }}
         run: |
-          docker push ${{ matrix.image }}:${SHORT_SHA:0:4}
-          docker push ${{ matrix.image }}:latest
+          IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
+          docker push ${IMAGE}:${SHORT_SHA}
+          docker push ${IMAGE}:${SHORT_SHA:0:4}
+          docker push ${IMAGE}:latest
