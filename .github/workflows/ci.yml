@@ -112,12 +112,6 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
 
-      - name: Upload Trivy Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-results-${{ matrix.service }}
-          path: trivy-results.sarif
-
       - name: Push image to Docker Hub for ${{ matrix.service }}
         run: |
           IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
