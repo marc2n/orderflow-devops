@@ -80,7 +80,8 @@ jobs:
       - name: Build Docker image for ${{ matrix.service }}
         run: |
           IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
-          docker build -t ${IMAGE}:${SHORT_SHA} -f ${{ matrix.dockerfile }} .
+          # use service folder as build context so Dockerfile's "COPY src ./src" works
+          docker build -t ${IMAGE}:${SHORT_SHA} -f ${{ matrix.dockerfile }} ${{ matrix.service }}
           # create short tag (first 4 chars) and latest tag
           docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:${SHORT_SHA:0:4}
           docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:latest
