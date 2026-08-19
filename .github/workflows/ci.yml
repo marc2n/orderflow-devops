@@ -27,13 +27,13 @@ jobs:
           cache: maven
 
       - name: Maven test
-        run: ./mvnw -B test
+        run: mvn -B test
 
       - name: Maven package
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
-        run: ./mvnw -B package -DskipTests
+        run: mvn -B package -DskipTests
 
       - name: Upload order-service artifact
         uses: actions/upload-artifact@v4
