@@ -72,12 +72,14 @@ public class OrderService {
                 .build();
     }
 
-    public void deleteOrder(OrderRequest orderRequest) {
-        Order order = orderRepository.findByCustomerName(orderRequest.getCustomerName());
-        if (order == null || !Objects.equals(order.getProductName(), orderRequest.getProductName())) {
-            throw new RuntimeException("Order not found");
-        }
+    public void deleteOrder(Long orderNumber) {
+        log.info("Deleting order with order number: {}", orderNumber);
+        Order order = orderRepository.findById(orderNumber)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        log.info("order to deleted: {}", order);
+        long deletedOrderNumber = order.getId();
+        log.info("Deleted order number: {}", deletedOrderNumber);
         orderRepository.delete(order);
-        sendOrderNotification("OrderDeleted event for order: "+order.getId().toString());
+        sendOrderNotification("OrderDeleted event for order: "+deletedOrderNumber);
     }
 }

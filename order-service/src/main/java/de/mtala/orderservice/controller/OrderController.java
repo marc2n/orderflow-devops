@@ -42,9 +42,9 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrderById(orderNumber));
     }
 
-    @DeleteMapping("/delete")
-    public ResponseEntity<Void> deleteOrder(@RequestBody OrderRequest orderRequest) {
-        orderService.deleteOrder(orderRequest);
+    @DeleteMapping("/delete/{orderNumber}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable Long orderNumber) {
+        orderService.deleteOrder(orderNumber);
         return ResponseEntity.noContent().build();
     }
 
