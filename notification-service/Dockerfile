@@ -1,9 +1,17 @@
+FROM maven:3.9.11-eclipse-temurin-21 AS build
+WORKDIR /app
+
+COPY . .
+RUN mvn -B -ntp clean package -DskipTests
+
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Copy the already-built jar from the service's target directory (build artifacts are uploaded/downloaded between jobs)
-COPY target/*jar notification-service.jar
+RUN addgroup --system spring && adduser --system --ingroup spring spring
+USER spring:spring
+
+COPY --from=build /app/notification-service/target/*jar notification-service.jar
 
 EXPOSE 8082
 
