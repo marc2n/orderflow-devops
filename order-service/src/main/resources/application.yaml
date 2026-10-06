@@ -2,15 +2,21 @@ spring:
   application:
     name: order-service
   datasource:
-    url: jdbc:mysql://localhost:3307/orderdb
+    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
 
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 server:
   port: 8081

@@ -1,0 +1,117 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP -h 127.0.0.1 -u\"$${MYSQL_USER}\" \"$${MYSQL_DATABASE}\" -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  kafka:
+    image: apache/kafka:4.1.2
+    environment:
+      # Stable development cluster identity; not a credential.
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: "3"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+      # Development retention policy.
+      KAFKA_LOG_RETENTION_HOURS: "24"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  kafka-init:
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:9092 \
+          --create \
+          --if-not-exists \
+          --topic notificationTopic \
+          --partitions 3 \
+          --replication-factor 1
+    restart: "no"
+
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+
+      # Development schema management; replace with migrations later.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_JPA_SHOW_SQL: "false"
+
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    ports:
+      - "127.0.0.1:8082:8082"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+
+volumes:
+  mysql-data:
+  kafka-data:

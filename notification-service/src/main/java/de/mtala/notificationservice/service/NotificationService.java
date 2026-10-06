@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class NotificationService {
 
-    @KafkaListener(topics = "notificationTopic", groupId = "order-service-group")
+    @KafkaListener(topics = "notificationTopic")
     public void listen(String message) {
         System.out.println("Received " + message);
     }
