@@ -2,15 +2,11 @@ spring:
   application:
     name: order-service
   datasource:
-    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
 
   jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+    show-sql: false
+    open-in-view: false
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
@@ -28,10 +24,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,circuitbreakerevents
+        include: health,info
   endpoint:
     health:
-      showDetails: always
+      show-details: never
 
 resilience4j:
   circuitBreaker:

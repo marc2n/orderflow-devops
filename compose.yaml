@@ -80,14 +80,7 @@ services:
 
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-
-      # Development schema management; replace with migrations later.
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_OPEN_IN_VIEW: "false"
-      SPRING_JPA_SHOW_SQL: "false"
-
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
     depends_on:
       mysql:
         condition: service_healthy
@@ -104,9 +97,6 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
     depends_on:
       kafka-init:
         condition: service_completed_successfully
