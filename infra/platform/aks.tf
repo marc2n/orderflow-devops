@@ -92,6 +92,13 @@ resource "azurerm_kubernetes_cluster" "platform" {
 
   tags = local.tags
 
+  monitor_metrics {}
+
+  oms_agent {
+    log_analytics_workspace_id      = azurerm_log_analytics_workspace.platform.id
+    msi_auth_for_monitoring_enabled = true
+  }
+
   depends_on = [
     azurerm_subnet_network_security_group_association.aks,
     azurerm_role_assignment.aks_subnet_network,

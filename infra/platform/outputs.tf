@@ -57,3 +57,18 @@ output "aks_node_resource_group_name" {
   description = "Resource group managed by AKS for node infrastructure."
   value       = azurerm_kubernetes_cluster.platform.node_resource_group
 }
+
+output "log_analytics_workspace_id" {
+  description = "Resource ID of the development logs workspace."
+  value       = azurerm_log_analytics_workspace.platform.id
+}
+
+output "azure_monitor_workspace_id" {
+  description = "Resource ID of the development Prometheus workspace."
+  value       = azurerm_monitor_workspace.platform.id
+}
+
+output "monitoring_action_group_id" {
+  description = "Resource ID of the development alert action group."
+  value       = azurerm_monitor_action_group.platform.id
+}

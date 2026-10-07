@@ -84,3 +84,27 @@ variable "aks_admin_ipv4_cidrs" {
     error_message = "Provide at least one public IPv4 address using /32."
   }
 }
+
+variable "monitoring_alert_email" {
+  description = "Email address receiving development monitoring alerts."
+  type        = string
+
+  validation {
+    condition = can(regex(
+      "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+      var.monitoring_alert_email
+    ))
+    error_message = "Provide a valid email address."
+  }
+}
+
+variable "log_analytics_daily_quota_gb" {
+  description = "Daily Log Analytics ingestion cap in GB; not a hard spending limit."
+  type        = number
+  default     = 0.5
+
+  validation {
+    condition     = var.log_analytics_daily_quota_gb > 0
+    error_message = "The daily ingestion cap must be greater than zero."
+  }
+}
