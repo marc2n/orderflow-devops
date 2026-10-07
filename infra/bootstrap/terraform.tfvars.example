@@ -1,0 +1,5 @@
+# Replace with a globally unique storage account name.
+storage_account_name = "storderflowstateYOURSUFFIX"
+
+# Replace with your administrator's Entra object ID.
+state_admin_object_id = "REPLACE_WITH_YOUR_ENTRA_OBJECT_ID"
