@@ -13,5 +13,5 @@ resource "azurerm_federated_identity_credential" "github_acr_publish_main" {
 
   issuer   = "https://token.actions.githubusercontent.com"
   audience = ["api://AzureADTokenExchange"]
-  subject  = "repo:marc2n/orderflow-devops:ref:refs/heads/main"
+  subject  = "repo:marc2n@14019628/orderflow-devops@1339648589:ref:refs/heads/main"
 }
