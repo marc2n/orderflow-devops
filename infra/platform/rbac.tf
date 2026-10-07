@@ -46,3 +46,11 @@ resource "azurerm_role_assignment" "aks_admin" {
   principal_id         = var.aks_admin_object_id
   principal_type       = "User"
 }
+
+resource "azurerm_role_assignment" "github_acr_publish" {
+  scope                = azurerm_container_registry.platform.id
+  role_definition_name = "AcrPush"
+
+  principal_id   = azurerm_user_assigned_identity.github_acr_publish.principal_id
+  principal_type = "ServicePrincipal"
+}

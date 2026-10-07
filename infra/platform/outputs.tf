@@ -72,3 +72,13 @@ output "monitoring_action_group_id" {
   description = "Resource ID of the development alert action group."
   value       = azurerm_monitor_action_group.platform.id
 }
+
+output "github_acr_publish_client_id" {
+  description = "Client ID used by GitHub Actions for OIDC authentication."
+  value       = azurerm_user_assigned_identity.github_acr_publish.client_id
+}
+
+output "github_acr_publish_tenant_id" {
+  description = "Tenant ID of the GitHub Actions publishing identity."
+  value       = azurerm_user_assigned_identity.github_acr_publish.tenant_id
+}

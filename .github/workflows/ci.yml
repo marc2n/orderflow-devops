@@ -2,112 +2,263 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   java-build:
-    runs-on: ubuntu-latest
-    env:
-      SHORT_SHA: ${{ github.sha }}
+    name: Java verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Setup JDK 21
-        uses: actions/setup-java@v5
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: maven
+          cache-dependency-path: "**/pom.xml"
 
-      - name: Maven test
-        run: mvn -B test
+      - name: Verify Maven project
+        run: mvn -B -ntp clean verify
 
-      - name: Maven package
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-        run: mvn -B package -DskipTests
-
-      - name: Upload order-service artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: order-service-target
-          path: order-service/target/*.jar
+          name: test-reports-${{ github.run_attempt }}
+          path: |
+            order-service/target/surefire-reports/
+            notification-service/target/surefire-reports/
+            order-service/target/failsafe-reports/
+            notification-service/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Upload notification-service artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: notification-service-target
-          path: notification-service/target/*.jar
-
-      - name: Sonar analysis
+      - name: Optional SonarCloud analysis
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          if [ -n "$SONAR_TOKEN" ] && [ -n "$SONAR_ORGANIZATION" ] && [ -n "$SONAR_PROJECT_KEY" ]; then
-            mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-              -Dsonar.organization="$SONAR_ORGANIZATION" \
-              -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-              -Dsonar.host.url=https://sonarcloud.io
-          else
-            echo "SonarCloud configuration not provided; skipping Sonar analysis."
+          if [[ -z "$SONAR_TOKEN" && -z "$SONAR_ORGANIZATION" && -z "$SONAR_PROJECT_KEY" ]]; then
+            echo "SonarCloud is not configured; skipping analysis."
+            exit 0
           fi
 
-  docker-build-scan-push:
+          if [[ -z "$SONAR_TOKEN" || -z "$SONAR_ORGANIZATION" || -z "$SONAR_PROJECT_KEY" ]]; then
+            echo "::error::SonarCloud configuration is incomplete."
+            exit 1
+          fi
+
+          mvn -B -ntp \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar \
+            -Dsonar.organization="$SONAR_ORGANIZATION" \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.host.url=https://sonarcloud.io
+
+  container-build-scan:
+    name: Build and scan (${{ matrix.service }})
     needs: java-build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: notification-service
-            dockerfile: notification-service/Dockerfile
-          - service: order-service
-            dockerfile: order-service/Dockerfile
+        service:
+          - order-service
+          - notification-service
+
     env:
-      SHORT_SHA: ${{ github.sha }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SERVICE: ${{ matrix.service }}
+      LOCAL_IMAGE: orderflow/${{ matrix.service }}:${{ github.sha }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          persist-credentials: false
 
-      - name: Build Docker image for ${{ matrix.service }}
+      - name: Build container image
         run: |
-          IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
-          docker build -t ${IMAGE}:${SHORT_SHA} -f ${{ matrix.dockerfile }} .
-          # create short tag (first 4 chars) and latest tag
-          docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:${SHORT_SHA:0:4}
-          docker tag ${IMAGE}:${SHORT_SHA} ${IMAGE}:latest
+          docker build \
+            --pull \
+            --platform linux/amd64 \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$LOCAL_IMAGE" \
+            --file "$SERVICE/Dockerfile" \
+            .
 
-      - name: Scan Docker image for ${{ matrix.service }}
-        uses: aquasecurity/trivy-action@v0.20.0
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: ${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
-          format: table
+          version: "v0.75.0"
+          scan-type: image
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scanners: vuln
+          vuln-type: os,library
           severity: HIGH,CRITICAL
-          ignore-unfixed: true
+          ignore-unfixed: "false"
+          exit-code: "1"
+          format: table
+          timeout: "10m"
+          cache-dir: ${{ runner.temp }}/trivy-cache
 
-      - name: Push image to Docker Hub for ${{ matrix.service }}
+      - name: Export scanned image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          IMAGE=${DOCKERHUB_USERNAME}/${{ matrix.service }}
-          docker push ${IMAGE}:${SHORT_SHA}
-          docker push ${IMAGE}:${SHORT_SHA:0:4}
-          docker push ${IMAGE}:latest
+          docker save \
+            --output "$RUNNER_TEMP/image.tar" \
+            "$LOCAL_IMAGE"
+
+      - name: Upload scanned image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: image-${{ matrix.service }}
+          path: ${{ runner.temp }}/image.tar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+          overwrite: true
+
+  publish:
+    name: Publish images to ACR
+    needs:
+      - java-build
+      - container-build-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+
+    steps:
+      - name: Validate publishing configuration
+        run: |
+          for variable in \
+            AZURE_CLIENT_ID \
+            AZURE_TENANT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            ACR_NAME \
+            ACR_LOGIN_SERVER
+          do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::Missing repository variable: $variable"
+              exit 1
+            fi
+          done
+
+      - name: Download scanned images
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: image-*
+          path: ${{ runner.temp }}/images
+          merge-multiple: false
+          digest-mismatch: error
+
+      - name: Load and tag scanned images
+        run: |
+          for service in order-service notification-service; do
+            archive="$RUNNER_TEMP/images/image-$service/image.tar"
+            test -s "$archive"
+
+            docker load --input "$archive"
+
+            local_image="orderflow/$service:$GITHUB_SHA"
+            docker image inspect "$local_image" > /dev/null
+
+            docker tag \
+              "$local_image" \
+              "$ACR_LOGIN_SERVER/$service:$GITHUB_SHA"
+          done
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to ACR
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Push images and record registry digests
+        run: |
+          manifest="$RUNNER_TEMP/published-images.txt"
+          : > "$manifest"
+
+          {
+            echo "## Published container images"
+            echo
+            echo "Source commit: $GITHUB_SHA"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for service in order-service notification-service; do
+            image="$ACR_LOGIN_SERVER/$service:$GITHUB_SHA"
+
+            docker push "$image"
+
+            digest="$(az acr repository show \
+              --name "$ACR_NAME" \
+              --image "$service:$GITHUB_SHA" \
+              --query digest \
+              --output tsv)"
+
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Invalid registry digest returned for $service"
+              exit 1
+            fi
+
+            reference="$ACR_LOGIN_SERVER/$service@$digest"
+
+            printf '%s\n' "$reference" >> "$manifest"
+            printf -- '- `%s`\n' "$reference" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload published image references
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: published-images-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/published-images.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Clear Docker registry credentials
+        if: ${{ always() }}
+        run: |
+          if [[ -n "$ACR_LOGIN_SERVER" ]]; then
+            docker logout "$ACR_LOGIN_SERVER"
+          fi
