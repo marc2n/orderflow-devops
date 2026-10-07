@@ -49,3 +49,38 @@ variable "key_vault_admin_ipv4_cidrs" {
     error_message = "Provide at least one public IPv4 address with a /32 prefix."
   }
 }
+
+variable "aks_kubernetes_version" {
+  description = "Supported Kubernetes version selected for the development cluster."
+  type        = string
+  default     = "1.35.8"
+}
+
+variable "aks_admin_object_id" {
+  description = "Entra user object ID granted administrator access to development AKS."
+  type        = string
+
+  validation {
+    condition = can(regex(
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      var.aks_admin_object_id
+    ))
+    error_message = "Provide a valid Entra user object ID."
+  }
+}
+
+variable "aks_admin_ipv4_cidrs" {
+  description = "Administrative public IPv4 addresses permitted to reach the AKS API."
+  type        = set(string)
+
+  validation {
+    condition = (
+      length(var.aks_admin_ipv4_cidrs) > 0 &&
+      alltrue([
+        for cidr in var.aks_admin_ipv4_cidrs :
+        can(cidrnetmask(cidr)) && endswith(cidr, "/32")
+      ])
+    )
+    error_message = "Provide at least one public IPv4 address using /32."
+  }
+}

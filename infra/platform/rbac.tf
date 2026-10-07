@@ -32,3 +32,17 @@ resource "azurerm_role_assignment" "key_vault_admin" {
   principal_id         = var.key_vault_admin_object_id
   principal_type       = "User"
 }
+
+resource "azurerm_role_assignment" "aks_admin_credentials" {
+  scope                = azurerm_kubernetes_cluster.platform.id
+  role_definition_name = "Azure Kubernetes Service Cluster User Role"
+  principal_id         = var.aks_admin_object_id
+  principal_type       = "User"
+}
+
+resource "azurerm_role_assignment" "aks_admin" {
+  scope                = azurerm_kubernetes_cluster.platform.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = var.aks_admin_object_id
+  principal_type       = "User"
+}

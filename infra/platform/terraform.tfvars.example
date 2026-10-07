@@ -2,3 +2,5 @@ acr_name                   = "REPLACE_WITH_UNIQUE_ACR_NAME"
 key_vault_name             = "REPLACE_WITH_UNIQUE_VAULT_NAME"
 key_vault_admin_object_id  = "REPLACE_WITH_YOUR_ENTRA_OBJECT_ID"
 key_vault_admin_ipv4_cidrs = ["REPLACE_WITH_YOUR_PUBLIC_IPV4/32"]
+aks_admin_object_id  = "YOUR_ENTRA_USER_OBJECT_ID"
+aks_admin_ipv4_cidrs = ["YOUR_PUBLIC_IPV4/32"]

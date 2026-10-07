@@ -37,3 +37,23 @@ output "key_vault_uri" {
   description = "Development Key Vault data-plane endpoint."
   value       = azurerm_key_vault.platform.vault_uri
 }
+
+output "aks_name" {
+  description = "Development AKS cluster name."
+  value       = azurerm_kubernetes_cluster.platform.name
+}
+
+output "aks_id" {
+  description = "Development AKS resource ID."
+  value       = azurerm_kubernetes_cluster.platform.id
+}
+
+output "aks_oidc_issuer_url" {
+  description = "OIDC issuer used for workload identity federation."
+  value       = azurerm_kubernetes_cluster.platform.oidc_issuer_url
+}
+
+output "aks_node_resource_group_name" {
+  description = "Resource group managed by AKS for node infrastructure."
+  value       = azurerm_kubernetes_cluster.platform.node_resource_group
+}
