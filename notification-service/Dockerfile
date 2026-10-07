@@ -6,6 +6,10 @@ RUN mvn -B -ntp clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-jammy
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libssl3 openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 RUN addgroup --system spring && adduser --system --ingroup spring spring
