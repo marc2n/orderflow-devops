@@ -82,3 +82,17 @@ output "github_acr_publish_tenant_id" {
   description = "Tenant ID of the GitHub Actions publishing identity."
   value       = azurerm_user_assigned_identity.github_acr_publish.tenant_id
 }
+
+output "workload_identity_client_ids" {
+  description = "Client IDs for Kubernetes service-account annotations."
+
+  value = {
+    for name, identity in azurerm_user_assigned_identity.workload :
+    name => identity.client_id
+  }
+}
+
+output "workload_identity_tenant_id" {
+  description = "Tenant ID used by the Key Vault CSI configuration."
+  value       = data.azurerm_client_config.current.tenant_id
+}
