@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: orderflow-dev
+  labels:
+    app.kubernetes.io/name: mysql
+    app.kubernetes.io/part-of: orderflow
+spec:
+  serviceName: mysql-headless
+  replicas: 1
+  revisionHistoryLimit: 3
+
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysql
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysql
+        app.kubernetes.io/part-of: orderflow
+        azure.workload.identity/use: "true"
+
+    spec:
+      serviceAccountName: mysql
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: mysql
+          image: acrorderflowmarc2ndev1.azurecr.io/third-party/mysql@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+          imagePullPolicy: IfNotPresent
+
+          args:
+            - mysqld
+            - --datadir=/var/lib/mysql/data
+            - --innodb-buffer-pool-size=256M
+            - --max-connections=100
+
+          ports:
+            - name: mysql
+              containerPort: 3306
+
+          env:
+            - name: MYSQL_DATABASE
+              value: orderflow
+            - name: MYSQL_USER
+              value: orderflow
+            - name: MYSQL_ROOT_HOST
+              value: localhost
+            - name: MYSQL_ROOT_PASSWORD_FILE
+              value: /mnt/secrets/mysql-root-password
+            - name: MYSQL_PASSWORD_FILE
+              value: /mnt/secrets/mysql-password
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          startupProbe:
+            tcpSocket:
+              port: mysql
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 60
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  MYSQL_PWD="$(cat /mnt/secrets/mysql-password)" \
+                    mysql --protocol=TCP --host=127.0.0.1 \
+                    --connect-timeout=3 \
+                    --user="$MYSQL_USER" \
+                    --database="$MYSQL_DATABASE" \
+                    --execute="SELECT 1" >/dev/null 2>&1
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            tcpSocket:
+              port: mysql
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 6
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: runtime
+              mountPath: /var/run/mysqld
+            - name: temporary
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+
+      volumes:
+        - name: runtime
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: temporary
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: mysql-keyvault
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: orderflow-dev-standard-ssd
+        resources:
+          requests:
+            storage: 32Gi
