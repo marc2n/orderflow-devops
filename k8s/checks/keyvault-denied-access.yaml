@@ -1,0 +1,74 @@
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: order-service-root-denied-check
+  namespace: orderflow-dev
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    clientID: "6512fbb1-801a-4d2e-8e1f-49eb0a553340"
+    keyvaultName: "kv-orderflow-marc2n-dev1"
+    tenantId: "89cb50c2-e650-4eb2-910f-7bbf527a1fc9"
+    objects: |
+      array:
+        - |
+          objectName: orderflow-mysql-root-password
+          objectType: secret
+          objectAlias: forbidden-root-password
+          objectVersion: ""
+          filePermission: "0444"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: order-service-root-denied-check
+  namespace: orderflow-dev
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service-root-denied-check
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: order-service
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: check
+          image: acrorderflowmarc2ndev1.azurecr.io/order-service@sha256:3e454048cb39b33f6b062c40d95f6e2cfee7491c8bb3716aabafd4860df03de2
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              echo "FAIL: Root-secret mount succeeded for the order-service identity."
+              exit 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: order-service-root-denied-check
