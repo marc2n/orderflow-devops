@@ -4,7 +4,7 @@ An event-driven order management project demonstrating Java development, contain
 
 Orderflow combines two Spring Boot services with MySQL and Kafka. Its Azure development platform is provisioned with Terraform, and GitHub Actions publishes tested and scanned container images to Azure Container Registry through passwordless OIDC authentication.
 
-**Current status:** the AKS development platform and image publishing pipeline are operational. Deployment of the application workloads to AKS is the next milestone.
+**Current status:** both application services, MySQL, and Kafka are deployed to the AKS development environment. GitHub Actions tests, scans, and publishes application images to ACR; deployment is performed manually using Kubernetes manifests pinned to image digests. Key Vault secret delivery, persistent storage, dependency network isolation, and the order workflow have been verified.
 
 ## Project at a glance
 
@@ -75,7 +75,32 @@ Terraform provisions:
 - The Azure Key Vault Secrets Store CSI integration.
 - Monitoring workspaces, collection rules, and alert configuration.
 
-Key Vault infrastructure and AKS integration capabilities are enabled. Application secret delivery through that integration is part of the remaining workload deployment work.
+### Application correctness
+
+- Order creation, retrieval, and listing return generated order IDs.
+- Request validation rejects missing or blank names, names exceeding 255 characters, and missing or nonpositive quantities.
+- API errors use Spring Problem Details, including HTTP 400 for invalid requests, HTTP 404 for missing orders, and safe HTTP 500 responses.
+- Separate orders can contain the same product, including orders from the same customer.
+- Repository regression tests verify distinct IDs and independent deletion of orders with identical product names.
+
+### Kubernetes workloads
+
+- Both application services run on AKS using immutable ACR image digests.
+- MySQL and Kafka run as single-replica StatefulSets with persistent Azure Disk volumes.
+- Azure Workload Identity and the Key Vault Secrets Store CSI driver provide mounted password files to MySQL and order-service.
+- Application containers use non-root identities, read-only root filesystems, resource requests and limits, and health probes.
+- NetworkPolicies restrict inbound access to MySQL and Kafka to selected workloads in the application namespace.
+- Application access for development verification uses `kubectl port-forward`.
+
+### Database change management
+
+The existing development database received a manual migration removing the unique index on `orders.product_name`. The primary key on `orders.id` remains unchanged.
+
+The migration is recorded in:
+
+`order-service/src/main/resources/database/migrations/manual/001_allow_repeated_order_products.sql`
+
+This script is not executed automatically. Its index name must be verified against the target database before execution. A fresh database created from the updated entity mapping does not require this index-removal script.
 
 ### Container delivery
 
@@ -118,12 +143,12 @@ flowchart TD
     Platform --> Vault[Key Vault]
     Platform --> Monitor[Azure Monitor and Log Analytics]
 
-    ACR -. Planned application deployment .-> AKS
-    Vault -. Planned application secret delivery .-> AKS
+    ACR -->|Digest-pinned images| AKS
+    Vault -->|Workload Identity and CSI secret mounts| AKS
     AKS --> Monitor
 ```
 
-Solid lines represent implemented capabilities. Dashed lines represent the application integration work still to be completed.
+Terraform provisions the Azure infrastructure. GitHub Actions publishes scanned application images; Kubernetes manifests are applied manually to deploy workloads.
 
 ## CI workflow
 
@@ -159,7 +184,8 @@ SonarCloud analysis is optional. Its configured workflow submits analysis on `ma
 | Separate kubelet identity with `AcrPull` | Separate image consumption from publication |
 | Non-root runtime containers | Reduce application runtime privileges |
 | Trivy publication gate | Prevent known blocking findings from being published |
-| Key Vault | Provide the planned application secret-management boundary |
+| Key Vault and Workload Identity | Deliver application passwords through CSI mounts without embedding secret values in manifests |
+| Kubernetes NetworkPolicies | Restrict inbound access to MySQL and Kafka |
 | Restricted AKS API access | Limit administrative network access |
 | Terraform-managed infrastructure | Make infrastructure changes reviewable and repeatable |
 
@@ -175,6 +201,9 @@ Terraform does not manage application secret values as resources in the current 
 │   ├── dependabot.yml
 │   └── workflows/
 │       └── ci.yml
+├── k8s/
+│   ├── dev/
+│   └── checks/
 ├── notification-service/
 │   ├── Dockerfile
 │   ├── pom.xml
@@ -300,3 +329,21 @@ The implementation has demonstrated:
 - A Prometheus smoke-test alert firing and invoking its action group.
 - Successful GitHub OIDC authentication.
 - Successful publication of both scanned service images to ACR.
+- Key Vault secret access through workload identities, including a denied unauthorized-secret access check.
+- MySQL and Kafka persistence across workload restarts.
+- Allowed dependency connections and denied cross-namespace connections.
+- Application deployment from digest-pinned ACR images.
+- End-to-end order creation and deletion with notification consumption on AKS.
+- Duplicate-product orders receiving distinct IDs, with independent deletion and test-data cleanup.
+- A real missing-telemetry alert delivering an email notification.
+
+## Development scope and known limitations
+
+- Deployment to AKS is currently manual; GitHub Actions automates testing, image scanning, and publication.
+- Application access is verified through port-forwarding. Public ingress, HTTPS, and application authentication are not yet implemented.
+- MySQL and Kafka each use one replica. Persistent volumes provide storage persistence, but backups and disaster recovery have not been validated.
+- Database updates and Kafka publication are not atomic. A transactional outbox remains planned.
+- Database schema management currently uses Hibernate schema updates and a documented manual migration; an automated migration framework is not yet configured.
+- NetworkPolicies restrict dependency ingress. Comprehensive application ingress and egress restrictions remain future work.
+- Known findings in the third-party MySQL image were temporarily accepted for development. The application-image Trivy gate does not establish that every deployed third-party image is vulnerability-free.
+- The AKS node upgrade surge requires more vCPU quota than is currently available and remains an operational follow-up.
