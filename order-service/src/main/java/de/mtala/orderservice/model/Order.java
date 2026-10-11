@@ -24,7 +24,7 @@ public class Order {
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
     private Long id;
     private String customerName;
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String productName;
     private Integer quantity;
     private Instant createdAt;
