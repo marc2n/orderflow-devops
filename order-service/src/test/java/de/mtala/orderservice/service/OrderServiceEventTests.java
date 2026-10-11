@@ -1,9 +1,11 @@
 package de.mtala.orderservice.service;
 
 import de.mtala.orderservice.dto.OrderRequest;
+import de.mtala.orderservice.dto.OrderResponse;
 import de.mtala.orderservice.model.Order;
 import de.mtala.orderservice.repository.OrderRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -45,12 +47,18 @@ class OrderServiceEventTests {
 
     @Test
     void creatingOrderPublishesVersionedJsonWithOrderIdAsKey() {
-        when(repository.save(any(Order.class))).thenAnswer(invocation -> {
-            Order order = invocation.getArgument(0);
-            order.setId(42L);
-            order.setCreatedAt(Instant.parse("2026-10-06T12:00:00Z"));
-            return order;
-        });
+        Instant createdAt = Instant.parse("2026-10-06T12:00:00Z");
+
+        // Return a separate entity to verify that the service uses save()'s result.
+        Order savedOrder = Order.builder()
+                .id(42L)
+                .customerName("Test Customer")
+                .productName("Test Product")
+                .quantity(2)
+                .createdAt(createdAt)
+                .build();
+
+        when(repository.save(any(Order.class))).thenReturn(savedOrder);
         stubPendingPublication();
 
         OrderRequest request = OrderRequest.builder()
@@ -60,10 +68,26 @@ class OrderServiceEventTests {
                 .build();
 
         Instant before = Instant.now();
-        service.placeOrder(request);
+        OrderResponse response = service.placeOrder(request);
         Instant after = Instant.now();
 
-        verify(repository).save(any(Order.class));
+        ArgumentCaptor<Order> submittedOrder =
+                ArgumentCaptor.forClass(Order.class);
+        verify(repository).save(submittedOrder.capture());
+
+        assertThat(submittedOrder.getValue().getId()).isNull();
+        assertThat(submittedOrder.getValue().getCustomerName())
+                .isEqualTo("Test Customer");
+        assertThat(submittedOrder.getValue().getProductName())
+                .isEqualTo("Test Product");
+        assertThat(submittedOrder.getValue().getQuantity()).isEqualTo(2);
+
+        assertThat(response.getId()).isEqualTo(42L);
+        assertThat(response.getCustomerName()).isEqualTo("Test Customer");
+        assertThat(response.getProductName()).isEqualTo("Test Product");
+        assertThat(response.getQuantity()).isEqualTo(2);
+        assertThat(response.getCreatedAt()).isEqualTo(createdAt);
+
         assertPublishedEvent("ORDER_CREATED", 42L, before, after);
     }
 
@@ -121,6 +145,69 @@ class OrderServiceEventTests {
         doThrow(failure).when(repository).delete(order);
 
         assertThatThrownBy(() -> service.deleteOrder(42L)).isSameAs(failure);
+
+        verifyNoInteractions(kafkaTemplate);
+    }
+
+    @Test
+    void gettingOrderReturnsItsIdAndDetailsWithoutPublishingAnEvent() {
+        Instant createdAt = Instant.parse("2026-10-06T12:00:00Z");
+
+        Order order = Order.builder()
+                .id(42L)
+                .customerName("Test Customer")
+                .productName("Test Product")
+                .quantity(2)
+                .createdAt(createdAt)
+                .build();
+
+        when(repository.findById(42L)).thenReturn(Optional.of(order));
+
+        OrderResponse response = service.getOrderById(42L);
+
+        assertThat(response.getId()).isEqualTo(42L);
+        assertThat(response.getCustomerName()).isEqualTo("Test Customer");
+        assertThat(response.getProductName()).isEqualTo("Test Product");
+        assertThat(response.getQuantity()).isEqualTo(2);
+        assertThat(response.getCreatedAt()).isEqualTo(createdAt);
+
+        verify(repository).findById(42L);
+        verifyNoInteractions(kafkaTemplate);
+    }
+
+    @Test
+    void listingOrdersReturnsEachOrderIdWithoutPublishingEvents() {
+        Order first = Order.builder()
+                .id(42L)
+                .customerName("Customer A")
+                .productName("Product A")
+                .quantity(1)
+                .build();
+
+        Order second = Order.builder()
+                .id(43L)
+                .customerName("Customer B")
+                .productName("Product B")
+                .quantity(3)
+                .build();
+
+        when(repository.findAll()).thenReturn(List.of(first, second));
+
+        List<OrderResponse> responses = service.getOrders();
+
+        assertThat(responses)
+                .extracting(OrderResponse::getId)
+                .containsExactlyInAnyOrder(42L, 43L);
+
+        verify(repository).findAll();
+        verifyNoInteractions(kafkaTemplate);
+    }
+
+    @Test
+    void listingOrdersReturnsEmptyListWhenNoOrdersExist() {
+        when(repository.findAll()).thenReturn(List.of());
+
+        assertThat(service.getOrders()).isEmpty();
 
         verifyNoInteractions(kafkaTemplate);
     }

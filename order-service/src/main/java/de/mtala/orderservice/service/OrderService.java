@@ -28,44 +28,28 @@ public class OrderService {
 
     @Transactional
     public OrderResponse placeOrder(OrderRequest orderRequest) {
-        log.info("orderRequest: {}", orderRequest);
         Order order = Order.builder()
                 .customerName(orderRequest.getCustomerName())
                 .productName(orderRequest.getProductName())
                 .quantity(orderRequest.getQuantity())
                 .build();
 
-        orderRepository.save(order);
-        publishOrderEvent(OrderEvent.ORDER_CREATED, order.getId());
+        Order savedOrder = orderRepository.save(order);
+        publishOrderEvent(OrderEvent.ORDER_CREATED, savedOrder.getId());
 
-        return OrderResponse.builder()
-                .customerName(order.getCustomerName())
-                .productName(order.getProductName())
-                .quantity(order.getQuantity())
-                .createdAt(order.getCreatedAt())
-                .build();
+        return toResponse(savedOrder);
     }
 
     public List<OrderResponse> getOrders() {
         return orderRepository.findAll().stream()
-                .map(order -> OrderResponse.builder()
-                        .customerName(order.getCustomerName())
-                        .productName(order.getProductName())
-                        .quantity(order.getQuantity())
-                        .createdAt(order.getCreatedAt())
-                        .build())
+                .map(this::toResponse)
                 .toList();
     }
 
     public OrderResponse getOrderById(Long orderNumber) {
         Order order = orderRepository.findById(orderNumber)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
-        return OrderResponse.builder()
-                .customerName(order.getCustomerName())
-                .productName(order.getProductName())
-                .quantity(order.getQuantity())
-                .createdAt(order.getCreatedAt())
-                .build();
+        return toResponse(order);
     }
 
     @Transactional
@@ -110,5 +94,15 @@ public class OrderService {
                 );
             }
         });
+    }
+
+    private OrderResponse toResponse(Order order) {
+        return OrderResponse.builder()
+                .id(order.getId())
+                .customerName(order.getCustomerName())
+                .productName(order.getProductName())
+                .quantity(order.getQuantity())
+                .createdAt(order.getCreatedAt())
+                .build();
     }
 }

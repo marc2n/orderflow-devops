@@ -5,6 +5,7 @@ import de.mtala.orderservice.dto.OrderRequest;
 import de.mtala.orderservice.dto.OrderResponse;
 import de.mtala.orderservice.service.OrderService;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,9 +27,8 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping("/create")
-    @ResponseStatus(HttpStatus.CREATED)
     @CircuitBreaker(name = "orderServiceCircuitBreaker", fallbackMethod = "fallbackMethod")
-    public ResponseEntity<OrderResponse> placeOrder(@RequestBody OrderRequest orderRequest) {
+    public ResponseEntity<OrderResponse> placeOrder(@Valid @RequestBody OrderRequest orderRequest) {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.placeOrder(orderRequest));
     }
 
