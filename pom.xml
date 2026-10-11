@@ -45,6 +45,12 @@
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>1.85</version>
             </dependency>
+            <!-- Temporary security override for CVE-2026-106451. Review when upgrading Spring Boot / Kafka dependencies. -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.11.4</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
     <build>
