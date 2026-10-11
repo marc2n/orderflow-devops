@@ -42,7 +42,7 @@ spec:
 
       containers:
         - name: order-service
-          image: acrorderflowmarc2ndev1.azurecr.io/order-service@sha256:3e454048cb39b33f6b062c40d95f6e2cfee7491c8bb3716aabafd4860df03de2
+          image: acrorderflowmarc2ndev1.azurecr.io/order-service@sha256:bb0bccd1df2ce392a12ca2c39d62e2f53028b535d9a0cd1b27e4917ecb4f366b
           imagePullPolicy: IfNotPresent
 
           ports:

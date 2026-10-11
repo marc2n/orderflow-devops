@@ -40,7 +40,7 @@ spec:
 
       containers:
         - name: notification-service
-          image: acrorderflowmarc2ndev1.azurecr.io/notification-service@sha256:ba927a2ee463b33a0b8aed0dd22c84510edff57947d5adb701041eb5ce883317
+          image: acrorderflowmarc2ndev1.azurecr.io/notification-service@sha256:7d8341ffc2c7d9fa1fe8aef45497757fc3b289d8a34903900227a08492ae1bf4
           imagePullPolicy: IfNotPresent
 
           ports:
