@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: orderflow-dev
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: orderflow
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service
+        app.kubernetes.io/part-of: orderflow
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: order-service
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: order-service
+          image: acrorderflowmarc2ndev1.azurecr.io/order-service@sha256:3e454048cb39b33f6b062c40d95f6e2cfee7491c8bb3716aabafd4860df03de2
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8081
+
+          envFrom:
+            - configMapRef:
+                name: order-service-config
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 60
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: order-service-keyvault
