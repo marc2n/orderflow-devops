@@ -3,6 +3,7 @@ package de.mtala.orderservice.service;
 import de.mtala.orderservice.dto.OrderRequest;
 import de.mtala.orderservice.dto.OrderResponse;
 import de.mtala.orderservice.event.OrderEvent;
+import de.mtala.orderservice.exception.OrderNotFoundException;
 import de.mtala.orderservice.model.Order;
 import de.mtala.orderservice.repository.OrderRepository;
 import java.time.Instant;
@@ -48,14 +49,14 @@ public class OrderService {
 
     public OrderResponse getOrderById(Long orderNumber) {
         Order order = orderRepository.findById(orderNumber)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new OrderNotFoundException(orderNumber));
         return toResponse(order);
     }
 
     @Transactional
     public void deleteOrder(Long orderNumber) {
         Order order = orderRepository.findById(orderNumber)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new OrderNotFoundException(orderNumber));
         long deletedOrderNumber = order.getId();
         orderRepository.delete(order);
         publishOrderEvent(OrderEvent.ORDER_DELETED, deletedOrderNumber);

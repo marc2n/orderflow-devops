@@ -2,6 +2,7 @@ package de.mtala.orderservice.service;
 
 import de.mtala.orderservice.dto.OrderRequest;
 import de.mtala.orderservice.dto.OrderResponse;
+import de.mtala.orderservice.exception.OrderNotFoundException;
 import de.mtala.orderservice.model.Order;
 import de.mtala.orderservice.repository.OrderRepository;
 import java.time.Instant;
@@ -110,8 +111,8 @@ class OrderServiceEventTests {
         when(repository.findById(42L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deleteOrder(42L))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Order not found");
+                .isInstanceOf(OrderNotFoundException.class)
+                .hasMessage("Order 42 was not found.");
 
         verify(repository).findById(42L);
         verify(repository, never()).delete(any(Order.class));
@@ -209,6 +210,18 @@ class OrderServiceEventTests {
 
         assertThat(service.getOrders()).isEmpty();
 
+        verifyNoInteractions(kafkaTemplate);
+    }
+
+    @Test
+    void gettingMissingOrderThrowsOrderNotFoundWithoutPublishingAnEvent() {
+        when(repository.findById(42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getOrderById(42L))
+                .isInstanceOf(OrderNotFoundException.class)
+                .hasMessage("Order 42 was not found.");
+
+        verify(repository).findById(42L);
         verifyNoInteractions(kafkaTemplate);
     }
 

@@ -2,6 +2,7 @@ package de.mtala.orderservice.controller;
 
 import de.mtala.orderservice.dto.OrderRequest;
 import de.mtala.orderservice.dto.OrderResponse;
+import de.mtala.orderservice.exception.OrderNotFoundException;
 import de.mtala.orderservice.service.OrderService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -21,11 +22,14 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -163,7 +167,10 @@ class OrderControllerTests {
         mockMvc.perform(post("/api/order/create")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
 
         verifyNoInteractions(orderService);
     }
@@ -200,5 +207,103 @@ class OrderControllerTests {
                 .andExpect(jsonPath("$[1].id").value(43));
 
         verify(orderService).getOrders();
+    }
+
+    @Test
+    void gettingMissingOrderReturns404ProblemDetail() throws Exception {
+        when(orderService.getOrderById(42L))
+                .thenThrow(new OrderNotFoundException(42L));
+
+        mockMvc.perform(get("/api/order/42"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Not Found"))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail")
+                        .value("Order 42 was not found."))
+                .andExpect(jsonPath("$.instance").value("/api/order/42"));
+    }
+
+    @Test
+    void deletingMissingOrderReturns404ProblemDetail() throws Exception {
+        doThrow(new OrderNotFoundException(42L))
+                .when(orderService).deleteOrder(42L);
+
+        mockMvc.perform(delete("/api/order/delete/42"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail")
+                        .value("Order 42 was not found."));
+    }
+
+    @Test
+    void deletingExistingOrderReturns204WithoutBody() throws Exception {
+        mockMvc.perform(delete("/api/order/delete/42"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(orderService).deleteOrder(42L);
+    }
+
+    @Test
+    void invalidQuantityReturnsFieldValidationDetails() throws Exception {
+        Map<String, Object> request = validRequest();
+        request.put("quantity", 0);
+
+        mockMvc.perform(post("/api/order/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.detail")
+                        .value("One or more request fields are invalid."))
+                .andExpect(jsonPath("$.errors.length()").value(1))
+                .andExpect(jsonPath("$.errors[0].field").value("quantity"))
+                .andExpect(jsonPath("$.errors[0].message")
+                        .value("quantity must be greater than zero"))
+                .andExpect(jsonPath("$.errors[0].rejectedValue")
+                        .doesNotExist());
+
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void nonNumericOrderIdReturns400WithoutCallingService() throws Exception {
+        mockMvc.perform(get("/api/order/not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+
+        verifyNoInteractions(orderService);
+    }
+
+
+    @Test
+    void unexpectedFailureReturnsSafe500ProblemDetail() throws Exception {
+        when(orderService.placeOrder(any(OrderRequest.class)))
+                .thenThrow(new IllegalStateException(
+                        "Internal database connection details"));
+
+        mockMvc.perform(post("/api/order/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.detail")
+                        .value("An unexpected error occurred."))
+                .andExpect(jsonPath("$.stackTrace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist())
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString(
+                                        "Internal database connection details"))));
     }
 }

@@ -18,9 +18,6 @@ server:
   port: 8081
 
 management:
-  health:
-    circuitBreakers:
-      enabled: true
   endpoints:
     web:
       exposure:
@@ -28,17 +25,3 @@ management:
   endpoint:
     health:
       show-details: never
-
-resilience4j:
-  circuitBreaker:
-    instances:
-        orderServiceCircuitBreaker:
-            registerHealthIndicator: true
-            eventConsumerBufferSize: 10
-            slidingWindowSize: 5
-            slidingWindowType: COUNT_BASED
-            failureRateThreshold: 50
-            minimumNumberOfCalls: 5
-            permittedNumberOfCallsInHalfOpenState: 3
-            waitDurationInOpenState: 5s
-            automaticTransitionFromOpenToHalfOpenEnabled: true
